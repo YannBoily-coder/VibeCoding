@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galibier • Atome d'Hydrogène Interactif</title>
+    <style>
+        :root {
+            --bg-space: #030712;
+            --neon-blue: #60a5fa;
+            --neon-gold: #fbbf24;
+        }
+        body {
+            margin: 0;
+            background: var(--bg-space);
+            overflow: hidden;
+            color: #e0e7ff;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            user-select: none;
+        }
+        #ui {
+            position: absolute;
+            top: 25px;
+            left: 25px;
+            z-index: 20;
+            width: 380px;
+            background: rgba(10,15,30,0.85);
+            padding: 25px;
+            border-radius: 16px;
+            border: 1px solid rgba(96,165,250,0.4);
+            backdrop-filter: blur(12px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .data {
+            font-size: 0.8rem;
+            opacity: 0.8;
+            margin-bottom: 20px;
+            font-family: monospace;
+            color: #94a3b8;
+        }
+        .gemini-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        button {
+            background: rgba(30,41,59,0.6);
+            border: 1px solid var(--neon-blue);
+            color: #e0e7ff;
+            padding: 12px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.25s;
+            font-size: 0.85rem;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        button:hover {
+            background: var(--neon-blue);
+            color: var(--bg-space);
+            box-shadow: 0 0 15px rgba(96,165,250,0.4);
+        }
+        #output {
+            margin-top: 20px;
+            font-size: 0.85rem;
+            color: var(--neon-gold);
+            line-height: 1.5;
+            min-height: 60px;
+            background: rgba(0,0,0,0.4);
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 3px solid var(--neon-gold);
+            max-height: 320px;
+            overflow-y: auto;
+        }
+        #audioControls {
+            display: none;
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(0,0,0,0.4);
+            border-radius: 10px;
+            border: 1px solid rgba(96,165,250,0.3);
+        }
+        input[type="range"] { width: 100%; accent-color: #60a5fa; }
+        .preset-btn {
+            font-size: 0.8rem;
+            padding: 6px 10px;
+            flex: 1;
+        }
+        #instructions {
+            position: absolute;
+            bottom: 155px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 15;
+            font-size: 0.75rem;
+            color: rgba(148,163,184,0.6);
+            background: rgba(10,15,30,0.6);
+            padding: 6px 14px;
+            border-radius: 20px;
+            pointer-events: none;
+        }
+        canvas#waveCanvas {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 140px;
+            z-index: 5;
+            pointer-events: none;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+<div id="ui">
+    <h1>Galibier • Atome d'Hydrogène</h1>
+    <div class="data">532 Hz • Résonance Mouse Control</div>
+
+    <div class="gemini-controls">
+        <button onclick="startMeditation()">🧘 Visualisation Méditative</button>
+        <button onclick="toggleBinauralBeats()">🎵 Battements Binauraux Interactifs</button>
+        <p style="font-size:0.75rem; color:#94a3b8; margin:0">Active le son, puis glisse la souris pour faire chanter l'atome.</p>
+    </div>
+
+    <div id="audioControls">
+        <label>Volume : <span id="volumeValue">22</span>%</label>
+        <input type="range" id="volumeSlider" min="5" max="50" value="22" step="1" oninput="updateVolume(this.value)">
+        <label style="margin-top:12px;">Base Beat :</label>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button class="preset-btn" onclick="setBeatFrequency(4)">4 Hz (Delta)</button>
+            <button class="preset-btn" onclick="setBeatFrequency(8)">8 Hz (Alpha)</button>
+        </div>
+    </div>
+
+    <div id="output">Glisse pour faire pivoter l'atome.<br>Le noyau (centre rouge) doit osciller visiblement.</div>
+</div>
+
+<div id="instructions">🖱️ Glisse pour pivoter l'atome • La vague suit l'électron</div>
+
+<canvas id="waveCanvas"></canvas>
+
+<script>
+    // ==================== CONFIGURATION INITIALE & AUDIO ====================
+    let audioContext = null;
+    let leftOscillator = null;
+    let rightOscillator = null;
+    let binauralGain = null;
+    let isBinauralPlaying = false;
+    let currentBaseFreq = 250;
+    let currentBeatFreq = 6;
+    
+    let mouseAgitation = 0;
+    let targetMouseAgitation = 0;
+
+    // ==================== THREE.JS ====================
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x030712, 0.015);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 32;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    document.body.appendChild(renderer.domElement);
+
+    // ==================== NOYAU CENTRAL (FIXÉ & VISIBLE) ====================
+    const sphereGeometry = new THREE.SphereGeometry(5.5, 48, 48);
+    // On garde la géométrie intacte et on anime l'objet entier pour plus de stabilité
+    const coreSphere = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({
+        color: 0xef4444, // Rouge vif
+        wireframe: true,
+        transparent: true,
+        opacity: 0.35, // Un peu plus opaque
+        blending: THREE.AddBlending
+    }));
+    scene.add(coreSphere);
+
+    const rotationGroup = new THREE.Group();
+    rotationGroup.add(coreSphere);
+    scene.add(rotationGroup);
+
+    // ==================== TRAÎNÉE TORIQUE + ÉLECTRON ====================
+    const trailLength = 4200;
+    const trailGeometry = new THREE.BufferGeometry();
+    const trailPositions = new Float32Array(trailLength * 3);
+    const trailColors = new Float32Array(trailLength * 3);
+
+    trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+    trailGeometry.setAttribute('color', new THREE.BufferAttribute(trailColors, 3));
+
+    const trailMaterial = new THREE.LineBasicMaterial({
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.92,
+        blending: THREE.AddBlending
+    });
+
+    const trail = new THREE.Line(trailGeometry, trailMaterial);
+    rotationGroup.add(trail);
+
+    const electronGeometry = new THREE.SphereGeometry(0.42, 24, 24);
+    const electronMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const electron = new THREE.Mesh(electronGeometry, electronMaterial);
+    rotationGroup.add(electron);
+
+    // Halo de l'électron
+    const glowGeometry = new THREE.SphereGeometry(1.2, 20, 20); // Un peu plus grand
+    const glowMaterial = new THREE.MeshBasicMaterial({
+        color: 0xbae6fd, // Bleu clair
+        transparent: true,
+        opacity: 0.22, // Un peu plus lumineux
+        blending: THREE.AddBlending
+    });
+    const electronGlow = new THREE.Mesh(glowGeometry, glowMaterial);
+    rotationGroup.add(electronGlow);
+
+    // Variables mouvement électron
+    let angleMajor = 0;
+    let angleMinor = 0;
+
+    // ==================== INTERACTIONS SOURIS ====================
+    let isDragging = false;
+    let previousMousePosition = { x: 0, y: 0 };
+
+    window.addEventListener('mousedown', e => { if (!e.target.closest('#ui')) isDragging = true; });
+    window.addEventListener('mousemove', e => {
+        if (isDragging) {
+            const deltaX = e.clientX - previousMousePosition.x;
+            const deltaY = e.clientY - previousMousePosition.y;
+            
+            rotationGroup.rotation.y += deltaX * 0.0045;
+            rotationGroup.rotation.x += deltaY * 0.0045;
+
+            // Exciter l'audio et la pulsation
+            targetMouseAgitation = Math.min(Math.sqrt(deltaX * deltaX + deltaY * deltaY) * 0.18, 18);
+        }
+        previousMousePosition = { x: e.clientX, y: e.clientY };
+    });
+    window.addEventListener('mouseup', () => isDragging = false);
+
+    // ==================== ANIMATION LOOP ====================
+    let turbulence = 1.0;
+    let targetTurbulence = 1.0;
+
+    let waveAmplitude = 44;
+    let wavePhaseSpeed = 0.032;
+    let wavePhase = 0;
+
+    function animate() {
+        requestAnimationFrame(animate);
+        const time = Date.now() * 0.001;
+
+        targetMouseAgitation *= 0.96; // Retour au calme un peu plus lent
+        mouseAgitation += (targetMouseAgitation - mouseAgitation) * 0.1;
+
+        // --- MODULATION SONORE ---
+        if (isBinauralPlaying && rightOscillator) {
+            const dynamicBeat = currentBeatFreq + (mouseAgitation * 2.0); 
+            rightOscillator.frequency.setTargetAtTime(currentBaseFreq + dynamicBeat, audioContext.currentTime, 0.05);
+            
+            if (mouseAgitation > 0.1) {
+                document.getElementById('output').innerHTML = `<b style="color:#60a5fa">⚡ Espace agité (Interaction)</b>`;
+            } else {
+                 document.getElementById('output').innerHTML = `Atome d'Hydrogène vibecodé.<br>Stable à ${currentBeatFreq} Hz.`;
+            }
+        }
+
+        turbulence += (targetTurbulence - turbulence) * 0.06;
+
+        if (!isDragging) {
+            rotationGroup.rotation.y += 0.0009 * turbulence;
+            rotationGroup.rotation.z += 0.0002;
+        }
+
+        // --- ANIMATION NOYAU (NOUVELLE MÉTHODE DE PULSATION GLOBALE) ---
+        // C'est beaucoup plus robuste : on fait simplement pulser l'échelle globale de l'objet rouge.
+        // Ça ne peut plus "disparaître".
+        const excitation = turbulence + (mouseAgitation * 0.15);
+        const baseScale = 1.0;
+        const pulse = Math.sin(time * 3.5) * 0.06 * excitation; // Pulsation de ±6% max
+        coreSphere.scale.set(baseScale + pulse, baseScale + pulse, baseScale + pulse);
+        // coreSphere.material.opacity = 0.35 + pulse * 1.5; // Optionnel : l'opacité pulse aussi
+
+        // --- MOUVEMENT ÉLECTRON ---
+        angleMajor += 0.027;
+        angleMinor += 0.039;
+        const R = 12.2;
+        const rBase = 4.1;
+        const r = rBase + Math.sin(angleMinor * 1.7 + time * 0.35) * 0.7;
+
+        let x = (R + r * Math.cos(angleMinor)) * Math.cos(angleMajor);
+        let y = (R + r * Math.cos(angleMinor)) * Math.sin(angleMajor);
+        let z = r * Math.sin(angleMinor) + Math.sin(time * 1.4) * 0.55;
+
+        electron.position.set(x, y, z);
+        electronGlow.position.set(x, y, z);
+
+        // --- TRAÎNÉE ---
+        for (let i = trailLength - 1; i > 0; i--) {
+            trailPositions[i * 3 + 0] = trailPositions[(i - 1) * 3 + 0];
+            trailPositions[i * 3 + 1] = trailPositions[(i - 1) * 3 + 1];
+            trailPositions[i * 3 + 2] = trailPositions[(i - 1) * 3 + 2];
+        }
+        trailPositions[0] = x; trailPositions[1] = y; trailPositions[2] = z;
+        trailGeometry.attributes.position.needsUpdate = true;
+
+        const colorArray = trailGeometry.attributes.color.array;
+        for (let i = 0; i < trailLength; i++) {
+            const t = i / (trailLength - 1);
+            const fade = Math.pow(1 - t, 0.65);
+            colorArray[i * 3 + 0] = 0.38 * fade; colorArray[i * 3 + 1] = 0.66 * fade; colorArray[i * 3 + 2] = 0.98 * fade;
+        }
+        trailGeometry.attributes.color.needsUpdate = true;
+
+        // --- VAGUE DU BAS ---
+        waveAmplitude = 36 + Math.abs(z) * 2.1 + (mouseAgitation * 5);
+        wavePhaseSpeed = 0.024 + Math.abs(y) * 0.0018 + (mouseAgitation * 0.01);
+        const jitter = Math.sin(time * 4.5) * 0.004 * (Math.abs(z) / 6);
+        wavePhase += wavePhaseSpeed + jitter;
+
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // ==================== FONCTIONS UI ====================
+    function startMeditation() {
+        targetTurbulence = 0.4; // Calme
+        coreSphere.material.color.setHex(0xff7878); // Rouge plus clair
+        document.getElementById('output').innerHTML = `<b style="color:#fbbf24">🧘 Mode Méditation</b><br>Respire avec la pulsation douce du noyau rouge.`;
+    }
+
+    // ==================== AUDIO ====================
+    function toggleBinauralBeats() {
+        const controls = document.getElementById('audioControls');
+
+        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        if (!isBinauralPlaying) {
+            leftOscillator = audioContext.createOscillator();
+            rightOscillator = audioContext.createOscillator();
+            leftOscillator.type = rightOscillator.type = 'sine';
+
+            leftOscillator.frequency.value = currentBaseFreq;
+            rightOscillator.frequency.value = currentBaseFreq + currentBeatFreq;
+
+            const merger = audioContext.createChannelMerger(2);
+            const leftGain = audioContext.createGain();
+            const rightGain = audioContext.createGain();
+            leftGain.gain.value = rightGain.gain.value = 0.35;
+
+            leftOscillator.connect(leftGain).connect(merger, 0, 0);
+            rightOscillator.connect(rightGain).connect(merger, 0, 1);
+
+            binauralGain = audioContext.createGain();
+            binauralGain.gain.value = 0.22;
+
+            merger.connect(binauralGain).connect(audioContext.destination);
+
+            leftOscillator.start();
+            rightOscillator.start();
+
+            isBinauralPlaying = true;
+            controls.style.display = 'block';
+            document.getElementById('output').innerHTML = `<b style="color:#60a5fa">🎵 Son actif</b><br>Bouge l'atome pour moduler la fréquence.`;
+        } else {
+            if (leftOscillator) leftOscillator.stop();
+            if (rightOscillator) rightOscillator.stop();
+            isBinauralPlaying = false;
+            controls.style.display = 'none';
+            document.getElementById('output').innerText = "Son désactivé.";
+        }
+    }
+
+    function updateVolume(val) {
+        if (binauralGain) binauralGain.gain.value = val / 100;
+        document.getElementById('volumeValue').textContent = val;
+    }
+
+    function setBeatFrequency(newBeat) {
+        currentBeatFreq = newBeat;
+        if (rightOscillator && isBinauralPlaying) {
+            rightOscillator.frequency.setValueAtTime(currentBaseFreq + newBeat, audioContext.currentTime);
+        }
+    }
+
+    // ==================== VAGUE EN BAS ====================
+    const waveCanvas = document.getElementById('waveCanvas');
+    const waveCtx = waveCanvas.getContext('2d');
+
+    function resizeWaveCanvas() {
+        waveCanvas.width = window.innerWidth;
+        waveCanvas.height = 140;
+    }
+    resizeWaveCanvas();
+    window.addEventListener('resize', resizeWaveCanvas);
+
+    function drawWave() {
+        const w = waveCanvas.width;
+        const h = waveCanvas.height;
+        const centerY = h / 2;
+
+        waveCtx.clearRect(0, 0, w, h);
+        waveCtx.fillStyle = 'rgba(3, 7, 18, 0.65)';
+        waveCtx.fillRect(0, 0, w, h);
+
+        waveCtx.strokeStyle = '#60a5fa'; waveCtx.lineWidth = 2.5;
+        waveCtx.beginPath(); waveCtx.moveTo(0, 22); waveCtx.lineTo(w, 22); waveCtx.stroke();
+        
+        waveCtx.strokeStyle = '#ef4444'; waveCtx.lineWidth = 2.5;
+        waveCtx.beginPath(); waveCtx.moveTo(0, h - 22); waveCtx.lineTo(w, h - 22); waveCtx.stroke();
+
+        const gradient = waveCtx.createLinearGradient(0, 0, w, 0);
+        gradient.addColorStop(0.00, '#ff0000'); gradient.addColorStop(0.50, '#00ff00'); gradient.addColorStop(1.00, '#ff00ff');
+
+        waveCtx.strokeStyle = gradient;
+        waveCtx.lineWidth = 4.8;
+        waveCtx.shadowBlur = 28;
+        waveCtx.shadowColor = '#ffffff';
+
+        waveCtx.beginPath();
+        for (let x = 0; x <= w; x += 2) {
+            const y = centerY + waveAmplitude * Math.sin((x / (w / 8.8)) * Math.PI * 2 + wavePhase);
+            if (x === 0) waveCtx.moveTo(x, y);
+            else waveCtx.lineTo(x, y);
+        }
+        waveCtx.stroke();
+        waveCtx.shadowBlur = 0;
+    }
+
+    function animateWave() {
+        drawWave();
+        requestAnimationFrame(animateWave);
+    }
+    animateWave();
+
+</script>
+</body>
+</html>
