@@ -1,5 +1,5 @@
 # VibeCoding Grok, Gemini, Le Chat, Copilot
-# You can try all by https;//wwww.chezyann.net/name_of_file.ext
+# You can try all by https://wwww.chezyann.net/name_of_file.ext
 add diff idea to html js =)
 /**
  * MIT License
