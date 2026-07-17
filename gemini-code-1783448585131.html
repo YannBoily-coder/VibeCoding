@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>P3RCH3 - Connexion</title>
+    <style>
+        body { 
+				    background: #121212; 
+				    color: #e0e0e0; 
+				    font-family: monospace; 
+				    text-align: center; 
+				    padding: 50px; 
+				    margin: 0;
+				    min-height: 80vh;
+				    transition: filter 0.1s ease, box-shadow 0.1s ease;
+				
+				    /* La méthode magique pour forcer l'arc-en-ciel complet sur la bordure */
+				    border: 5px solid;
+				    border-image: linear-gradient(120deg, #ff003c, #ffaa00, #00ff66, #00ffff, #7f00ff, #ff003c) 1;
+				    
+				    /* Animation du dégradé */
+				    background-size: 100% 100%;
+				}
+
+        /* Animation de rotation du spectre de couleurs */
+        @keyframes pulseArcEnCiel {
+            0% { background-position: 0% 50%, 0% 50%; }
+            50% { background-position: 0% 50%, 100% 50%; }
+            100% { background-position: 0% 50%, 0% 50%; }
+        }
+
+        input, button { 
+            background: #222; 
+            color: #fff; 
+            border: 1px solid #532fff; 
+            padding: 10px; 
+            margin: 10px; 
+            font-family: monospace; 
+            font-size: 16px;
+        }
+
+        button:hover { 
+            background: #532fff; 
+            cursor: pointer; 
+        }
+
+        #output { 
+            margin-top: 20px; 
+            color: #00ffcc; 
+        }
+
+        .hidden { 
+            display: none; 
+        }
+        
+        #message {
+            font-style: italic;
+            color: #bb86fc;
+            margin-top: 20px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="generator">
+        <h1>[ P3RCH3 . NET ]</h1>
+        <p>Génère une vibration personnalisée pour un pote :</p>
+        <input type="text" id="from" placeholder="Ton pseudo"><br>
+        <input type="text" id="to" placeholder="Son pseudo"><br>
+        <input type="text" id="txt" placeholder="Ton message secret" style="width: 250px;"><br>
+        <button onclick="genererLien()">Créer le lien</button>
+        <div id="output"></div>
+    </div>
+
+    <div id="receiver" class="hidden">
+        <h1>Message Reçu !</h1>
+        <h2 id="welcomeMessage"></h2>
+        <p>Tu es bien perché. Bienvenue dans la matrice.</p>
+        <p id="message"></p>
+    </div>
+
+    <script>
+        // 1. ANALYSE DE L'URL (Lecture des signaux passés en paramètres)
+        const params       = new URLSearchParams(window.location.search);
+        const expediteur   = params.get('from');
+        const destinataire = params.get('to');
+        const texte        = params.get('txt');
+
+        // Si l'URL contient les variables nécessaires, on bascule l'interface
+        if (expediteur && destinataire) {
+            document.getElementById('generator').classList.add('hidden');
+            document.getElementById('receiver').classList.remove('hidden');
+            
+            // Affichage propre du message personnalisé corrigé
+            document.getElementById('welcomeMessage').innerText = `Hé ${destinataire}, tu as un signal de la part de ${expediteur} ! : ${texte}`;
+        }
+
+        // 2. FONCTION DE GENERATION DU LIEN DE PARTAGE
+        function genererLien() {
+            const f = document.getElementById('from').value;
+            const t = document.getElementById('to').value;
+            const m = document.getElementById('txt').value;
+            
+            if (f && t && m) {
+                // Construction de l'URL avec encodage des caractères spéciaux
+                const urlUnique = `${window.location.origin}${window.location.pathname}?from=${encodeURIComponent(f)}&to=${encodeURIComponent(t)}&txt=${encodeURIComponent(m)}`;
+                
+                document.getElementById('output').innerHTML = `
+                    <p>Partage ce lien sur X, Facebook ou un forum :</p>
+                    <input type="text" value="${urlUnique}" readonly style="width:80%; text-align:center;" onclick="this.select();">
+                `;
+            } else {
+                alert("Remplis tous les champs pour envoyer la vibration !");
+            }
+        }
+
+        // 3. CODE DE TRANSMISSION MORSE EN ARRIÈRE-PLAN
+        // Configuration du rythme ( . = court, - = long, espace = pause )
+        const codeMorse = ". . .   - - -   . . ."; // Code SOS par défaut
+        let index = 0;
+        
+        function emettreMorse() {
+            if (index >= codeMorse.length) index = 0;
+            const caractere = codeMorse[index];
+            
+            let duree = 300; // Pause de base entre les caractères
+            
+            if (caractere === '.') {
+                allumerSignal(100); // Flash court
+                duree = 200;
+            } else if (caractere === '-') {
+                allumerSignal(300); // Flash long
+                duree = 400;
+            }
+            
+            index++;
+            setTimeout(emettreMorse, duree);
+        }
+        
+        function allumerSignal(temps) {
+            // Effet visuel : boost de la luminosité globale du site (et de l'arc-en-ciel)
+            document.body.style.filter = "brightness(1.6)"; 
+            document.body.style.boxShadow = "inset 0 0 30px rgba(127, 0, 255, 0.4)";
+            
+            setTimeout(() => {
+                document.body.style.filter = "brightness(1)";
+                document.body.style.boxShadow = "none";
+            }, temps);
+        }
+        
+        // Initialisation de la boucle infinie du signal secret
+        emettreMorse();
+    </script>
+</body>
+</html>
