@@ -1,0 +1,540 @@
+<!--
+https://share.gemini.google/mKIE911nNzRm
+    MIT License
+
+    Copyright (c) 2026 Yann
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+-->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vibe Coding - Fullscreen Cosmic Workspace</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #04050f;
+
+            /* Couleurs initiales du robot */
+            --head-color: #3ddc84;
+            --torso-color: #4285f4;
+            --l-arm-color: #ea4335;
+            --r-arm-color: #fbbc05;
+            --l-leg-color: #ab47bc;
+            --r-leg-color: #00acc1;
+            --ant-color: #ff7043;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        /* La zone de capture s'étend désormais sur TOUT l'écran */
+        .scene {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: var(--bg-color);
+            overflow: hidden;
+        }
+
+        /* Canvas plein écran pour la galaxie géante et le tore */
+        #spaceCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Le Robot reste centré à sa taille d'origine */
+        .robot {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 2;
+            animation: floatBody 3.5s ease-in-out infinite alternate;
+        }
+
+        /* --- LA TÊTE (Préservée) --- */
+        .head {
+            position: relative;
+            width: 120px;
+            height: 60px;
+            background-color: var(--head-color);
+            border-top-left-radius: 60px;
+            border-top-right-radius: 60px;
+            margin-bottom: 8px;
+            transform-origin: bottom center;
+            animation: wobbleHead 1.2s ease-in-out infinite alternate;
+            transition: background-color 0.2s ease;
+        }
+
+        .eyes {
+            position: absolute;
+            bottom: 15px;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            padding: 0 20px;
+            box-sizing: border-box;
+        }
+
+        .eye {
+            width: 14px;
+            height: 14px;
+            background-color: var(--bg-color);
+            border-radius: 50%;
+            transition: transform 0.1s ease;
+        }
+
+        .antenna {
+            position: absolute;
+            top: -20px;
+            width: 6px;
+            height: 25px;
+            background-color: var(--ant-color);
+            border-radius: 3px;
+            transition: background-color 0.2s ease;
+        }
+
+        .antenna.left {
+            left: 25px;
+            transform-origin: bottom center;
+            animation: spinAntenna 1.1s linear infinite;
+        }
+
+        .antenna.right {
+            right: 25px;
+            transform-origin: bottom center;
+            animation: spinAntenna 0.7s linear infinite reverse;
+        }
+
+        /* --- LE CORPS --- */
+        .body-container {
+            position: relative;
+            width: 120px;
+            height: 108px;
+        }
+
+        .torso {
+            width: 100%;
+            height: 100%;
+            background-color: var(--torso-color);
+            border-bottom-left-radius: 20px;
+            border-bottom-right-radius: 20px;
+            transition: background-color 0.2s ease;
+        }
+
+        /* --- LES BRAS --- */
+        .arm {
+            position: absolute;
+            top: 0;
+            width: 24px;
+            height: 90px;
+            border-radius: 12px;
+            transition: background-color 0.2s ease;
+        }
+
+        .arm.left {
+            left: -32px;
+            background-color: var(--l-arm-color);
+            transform-origin: 12px 12px;
+            animation: spinArmLeft 2.3s linear infinite;
+        }
+
+        .arm.right {
+            right: -32px;
+            background-color: var(--r-arm-color);
+            transform-origin: 12px 12px;
+            animation: spinArmRight 1.7s linear infinite;
+        }
+
+        /* --- LES JAMBES --- */
+        .legs-container {
+            display: flex;
+            justify-content: space-between;
+            width: 80px;
+            margin-top: -4px;
+        }
+
+        .leg {
+            width: 24px;
+            height: 65px;
+            border-radius: 12px;
+            transform-origin: 12px 0px;
+            transition: background-color 0.2s ease;
+        }
+
+        .leg.left {
+            background-color: var(--l-leg-color);
+            animation: dangleLegLeft 1.4s ease-in-out infinite alternate;
+        }
+
+        .leg.right {
+            background-color: var(--r-leg-color);
+            animation: spinLegRight 3.1s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+        }
+
+        /* --- ANIMATIONS CSS --- */
+        @keyframes floatBody {
+            0% { transform: translateY(15px) rotate(-3deg); }
+            100% { transform: translateY(-20px) rotate(4deg); }
+        }
+        @keyframes wobbleHead {
+            0% { transform: rotate(-20deg); }
+            100% { transform: rotate(25deg); }
+        }
+        @keyframes spinAntenna {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes spinArmLeft {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(-360deg); }
+        }
+        @keyframes spinArmRight {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes spinLegRight {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes dangleLegLeft {
+            0% { transform: rotate(-35deg); }
+            100% { transform: rotate(55deg); }
+        }
+
+        /* Overlays UI */
+        .dashboard {
+            position: absolute;
+            top: 25px;
+            left: 25px;
+            color: #4af626;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            background: rgba(4, 5, 15, 0.85);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid rgba(74, 246, 38, 0.25);
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .controls {
+            position: absolute;
+            top: 25px;
+            right: 25px;
+            z-index: 10;
+        }
+
+        .btn-save {
+            background: transparent;
+            color: #4af626;
+            border: 2px solid #4af626;
+            padding: 12px 24px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            box-shadow: 0 0 10px rgba(74, 246, 38, 0.2);
+            transition: all 0.2s ease;
+        }
+
+        .btn-save:hover {
+            background: #4af626;
+            color: #04050f;
+            box-shadow: 0 0 25px rgba(74, 246, 38, 0.7);
+        }
+
+        .info {
+            position: absolute;
+            bottom: 25px;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 0.8rem;
+            text-align: center;
+            width: 100%;
+            pointer-events: none;
+            letter-spacing: 4px;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard">
+        <div>// QUANTUM_FULLSCREEN_SYSTEM: ACTIVE</div>
+        <div>GALAXY_RADIUS: DYNAMIC_WINDOW</div>
+        <div>TORUS_ELECTRON_FIELD: FIXED_RATIO (R=140)</div>
+        <div>HERTZ_ALIGNMENT: 532Hz</div>
+    </div>
+
+    <div class="controls">
+        <button class="btn-save" id="btnCapture">WALLPAPER SNAPSHOT (.PNG)</button>
+    </div>
+
+    <div class="scene" id="captureArea">
+        <canvas id="spaceCanvas"></canvas>
+
+        <div class="robot" id="myRobot">
+            <div class="head" id="part-head">
+                <div class="antenna left" id="part-ant-l"></div>
+                <div class="antenna right" id="part-ant-r"></div>
+                <div class="eyes">
+                    <div class="eye"></div>
+                    <div class="eye"></div>
+                </div>
+            </div>
+
+            <div class="body-container">
+                <div class="arm left" id="part-arm-l"></div>
+                <div class="torso" id="part-torso"></div>
+                <div class="arm right" id="part-arm-r"></div>
+            </div>
+
+            <div class="legs-container">
+                <div class="leg left" id="part-leg-l"></div>
+                <div class="leg right" id="part-leg-r"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="info">L'OSCILLATION COSMIQUE — TOTAL EMBEDDED VIEW</div>
+
+    <script>
+        const canvas = document.getElementById('spaceCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Adaptation dynamique initiale au viewport complet
+        let centerX, centerY, maxGalaxyRadius;
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            centerX = canvas.width / 2;
+            centerY = canvas.height / 2;
+
+            // La galaxie prend toute la place disponible (basée sur la diagonale ou la plus grande dimension)
+            maxGalaxyRadius = Math.max(canvas.width, canvas.height) * 0.65;
+        }
+        resizeCanvas();
+
+        // --- 1. CONFIGURATION DE LA GALAXIE GÉANTE (ADAPTATIVE) ---
+        const numGalaxyStars = 750; // Plus d'étoiles pour occuper le plein écran majestueusement
+        const galaxyStars = [];
+        const arms = 4;
+
+        for (let i = 0; i < numGalaxyStars; i++) {
+            const armIndex = i % arms;
+            const angleOffset = (armIndex * Math.PI * 2) / arms;
+
+            // Distribution de 0 à 1
+            const randDistFactor = Math.pow(Math.random(), 2.2);
+
+            const spiralFactor = 0.012;
+            galaxyStars.push({
+                distFactor: randDistFactor, // Sauvegarde du facteur de distance pour recalculer sur le resize
+                angleOffsetFactor: angleOffset,
+                size: Math.random() * 2.0 + 0.3,
+                colorSelector: Math.random()
+            });
+        }
+
+        let galaxyGlobalRotation = 0;
+
+        // --- 2. CONFIGURATION DU TORE (FIXE AUTOUR DU ROBOT) ---
+        // Le grand rayon R et petit rayon r restent identiques pour ne pas étirer le nuage d'électrons du robot
+        const numTorusParticles = 180;
+        const torusParticles = [];
+        const R = 140;
+        const r = 45;
+
+        for (let i = 0; i < numTorusParticles; i++) {
+            torusParticles.push({
+                theta: Math.random() * Math.PI * 2,
+                phi: Math.random() * Math.PI * 2,
+                speedTheta: (Math.random() * 0.008 + 0.003) * (Math.random() > 0.5 ? 1 : -1),
+                speedPhi: (Math.random() * 0.025 + 0.01),
+                size: Math.random() * 2.2 + 0.6,
+                randomOffset: Math.random() * 6,
+                colorHue: Math.floor(Math.random() * 360)
+            });
+        }
+
+        // --- BOUCLE DE RENDU ---
+        function drawUniverse() {
+            ctx.fillStyle = 'rgba(4, 5, 15, 0.25)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // A. RENDU DE LA GALAXIE SPIRALE GÉANTE EN ARRIÈRE-PLAN
+            galaxyGlobalRotation += 0.0012;
+
+            // Bulbe central immersif
+            const coreGlow = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, maxGalaxyRadius * 0.2);
+            coreGlow.addColorStop(0, 'rgba(255, 242, 225, 0.28)');
+            coreGlow.addColorStop(0.5, 'rgba(220, 170, 255, 0.09)');
+            coreGlow.addColorStop(1, 'rgba(4, 5, 15, 0)');
+            ctx.fillStyle = coreGlow;
+            ctx.fillRect(centerX - maxGalaxyRadius*0.3, centerY - maxGalaxyRadius*0.3, maxGalaxyRadius*0.6, maxGalaxyRadius*0.6);
+
+            galaxyStars.forEach(star => {
+                const currentDistance = star.distFactor * maxGalaxyRadius;
+                const angle = currentDistance * 0.012 + star.angleOffsetFactor + (star.colorSelector - 0.5) * 0.35 + galaxyGlobalRotation;
+
+                const x = centerX + Math.cos(angle) * currentDistance;
+                // Effet d'écrasement de perspective sur l'axe Y
+                const y = centerY + Math.sin(angle) * currentDistance * 0.72;
+
+                ctx.beginPath();
+                ctx.arc(x, y, star.size, 0, Math.PI * 2);
+
+                // Attribution des palettes de couleur
+                if (star.distFactor < 0.15) {
+                    ctx.fillStyle = `hsla(${32 + star.colorSelector*15}, 95%, 85%, ${0.4 + Math.random()*0.4})`;
+                } else {
+                    ctx.fillStyle = `hsla(${195 + star.colorSelector*65}, 85%, 75%, ${0.25 + star.colorSelector*0.55})`;
+                }
+                ctx.fill();
+            });
+
+            // B. RENDU DU TORE ÉLECTRONIQUE (PROCHE ET CENTRÉ SUR LE ROBOT)
+            torusParticles.forEach(p => {
+                p.theta += p.speedTheta;
+                p.phi += p.speedPhi;
+
+                const cosPhi = Math.cos(p.phi);
+                const sinPhi = Math.sin(p.phi);
+
+                const x2d = centerX + (R + (r + p.randomOffset) * cosPhi) * Math.cos(p.theta);
+                const y2d = centerY + (R + (r + p.randomOffset) * cosPhi) * Math.sin(p.theta);
+
+                const depthScale = (sinPhi + 1) / 2;
+                const currentSize = p.size * (0.5 + depthScale * 0.8);
+                const opacity = 0.2 + depthScale * 0.75;
+
+                ctx.beginPath();
+                ctx.arc(x2d, y2d, currentSize, 0, Math.PI * 2);
+                ctx.fillStyle = `hsla(${p.colorHue}, 90%, 80%, ${opacity})`;
+                ctx.fill();
+
+                if (currentSize > 1.8) {
+                    ctx.beginPath();
+                    ctx.arc(x2d, y2d, currentSize * 0.4, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+                    ctx.fill();
+                }
+            });
+
+            requestAnimationFrame(drawUniverse);
+        }
+
+        drawUniverse();
+
+        // Écouteur de redimensionnement de la fenêtre pour garder la galaxie synchrone et infinie
+        window.addEventListener('resize', resizeCanvas);
+
+
+        // --- ENGINE DES COULEURS ASYNCHRONES DU ROBOT ---
+        function getRandomVibrantColor() {
+            const hue = Math.floor(Math.random() * 360);
+            return `hsl(${hue}, 95%, 60%)`;
+        }
+
+        const groupA = [
+            document.getElementById('part-head'),
+            document.getElementById('part-arm-l'),
+            document.getElementById('part-leg-r')
+        ];
+
+        const groupB = [
+            document.getElementById('part-torso'),
+            document.getElementById('part-arm-r'),
+            document.getElementById('part-leg-l'),
+            document.getElementById('part-ant-l'),
+            document.getElementById('part-ant-r')
+        ];
+
+        setInterval(() => {
+            groupA.forEach(el => {
+                const color = getRandomVibrantColor();
+                el.style.backgroundColor = color;
+                el.style.boxShadow = `0 0 15px ${color}`;
+            });
+        }, 277);
+
+        setInterval(() => {
+            groupB.forEach(el => {
+                const color = getRandomVibrantColor();
+                el.style.backgroundColor = color;
+                el.style.boxShadow = `0 0 20px ${color}`;
+            });
+        }, 532);
+
+        // Interaction Souris Dynamique
+        const robot = document.getElementById('myRobot');
+        const eyes = document.querySelectorAll('.eye');
+
+        document.addEventListener('mousemove', (e) => {
+            const mouseX = (e.clientX / window.innerWidth) - 0.5;
+            const mouseY = (e.clientY / window.innerHeight) - 0.5;
+
+            eyes.forEach(eye => {
+                eye.style.transform = `translate(${mouseX * 15}px, ${mouseY * 15}px)`;
+            });
+            robot.style.transform = `rotate(${mouseX * 40}deg) scale(${1 + Math.abs(mouseY) * 0.12})`;
+        });
+
+        document.addEventListener('mouseleave', () => {
+            robot.style.transform = 'none';
+        });
+
+        // --- CAPTURE ET EXPORT FULLSCREEN ---
+        document.getElementById('btnCapture').addEventListener('click', () => {
+            const area = document.getElementById('captureArea');
+            html2canvas(area, {
+                backgroundColor: '#04050f',
+                logging: false,
+                useCORS: true,
+                width: window.innerWidth,
+                height: window.innerHeight
+            }).then(canvasCaptured => {
+                const image = canvasCaptured.toDataURL("image/png");
+                const link = document.createElement('a');
+                link.download = `cosmic-fullscreen-wallpaper-${Date.now()}.png`;
+                link.href = image;
+                link.click();
+            });
+        });
+    </script>
+</body>
+</html>
