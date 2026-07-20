@@ -1,5 +1,6 @@
 # VibeCoding Grok, Gemini, Le Chat, Copilot
 # You can try all by https://wwww.chezyann.net/name_of_file.ext
+# Try => https://www.chezyann.net/gemini-code-1784584033150.html (Vibrium Vbλ • Dynamic State Shift 277Hz ↔ 532Hz)
 add diff idea to html js =)
 /**
  * MIT License
