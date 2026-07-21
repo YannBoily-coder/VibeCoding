@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>3D Engine Telemetry</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #010103; font-family: 'Courier New', monospace; }
+        canvas { display: block; }
+        
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #ff7700;
+            background: rgba(15, 10, 5, 0.85);
+            padding: 15px 20px;
+            border: 1px solid #ff7700;
+            border-radius: 4px;
+            box-shadow: 0 0 15px rgba(255, 119, 0, 0.4);
+            pointer-events: none;
+            z-index: 100;
+            min-width: 220px;
+        }
+        #hud h2 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            letter-spacing: 2px;
+            color: #ff2200;
+            text-transform: uppercase;
+            border-bottom: 1px solid #ff2200;
+            padding-bottom: 4px;
+        }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 6px 0;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .stat-value { color: #ffffff; }
+        .danger { color: #ff2200; animation: blink 0.6s infinite alternate; }
+        
+        @keyframes blink {
+            from { opacity: 1; }
+            to { opacity: 0.3; }
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+<div id="hud">
+    <h2>[ TELEMETRY V8 ]</h2>
+    <div class="stat-row"><span>STATUS:</span><span class="stat-value danger">OVERBOOST</span></div>
+    <div class="stat-row"><span>RPM:</span><span class="stat-value" id="val-rpm">8450</span></div>
+    <div class="stat-row"><span>CYL PRESS:</span><span class="stat-value" id="val-press">28.4 PSI</span></div>
+    <div class="stat-row"><span>NOS TEMP:</span><span class="stat-value" id="val-temp">94°C</span></div>
+</div>
+
+<script>
+    // --- CONF GLOBALE ---
+    const pistonHeight = 4;
+    const pistonSize = 0.8;
+    const gridSize = 14;
+    const spacing = 1.35;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x010103);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 2000);
+    camera.position.set(32, 28, 32);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    // --- ÉCLAIRAGE UNDERGROUND ORANGE & ACCENTS ---
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+    
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(20, 50, 30);
+    scene.add(dirLight);
+
+    // Néon sous-châssis Orange Chaud
+    const neonUnderglow = new THREE.PointLight(0xff6600, 8, 80);
+    neonUnderglow.position.set(0, -2, 0);
+    scene.add(neonUnderglow);
+
+    // Accent secondaire rouge/ambre
+    const neonSecondary = new THREE.PointLight(0xff2200, 5, 60);
+    neonSecondary.position.set(0, 10, 0);
+    scene.add(neonSecondary);
+
+    // --- CRÉATION DU SOL EN DAMIER (GRIS ET ORANGE ALTERNÉS) ---
+    const floorGroup = new THREE.Group();
+    const squareGeometry = new THREE.PlaneGeometry(spacing, spacing);
+
+    const matGray = new THREE.MeshStandardMaterial({
+        color: 0x22252a,
+        roughness: 0.4,
+        metalness: 0.5
+    });
+
+    const matOrange = new THREE.MeshStandardMaterial({
+        color: 0xff5500,
+        roughness: 0.2,
+        metalness: 0.2,
+        emissive: 0xff3300,
+        emissiveIntensity: 0.3
+    });
+
+    for (let x = 0; x < gridSize; x++) {
+        for (let z = 0; z < gridSize; z++) {
+            // Alternance damier
+            const isOrange = (x + z) % 2 === 0;
+            const tileMat = isOrange ? matOrange : matGray;
+
+            const tile = new THREE.Mesh(squareGeometry, tileMat);
+            tile.rotation.x = -Math.PI / 2;
+            
+            const posX = (x - gridSize / 2) * spacing;
+            const posZ = (z - gridSize / 2) * spacing;
+            tile.position.set(posX, -0.05, posZ);
+
+            floorGroup.add(tile);
+        }
+    }
+    scene.add(floorGroup);
+
+    // Grille de contour pour souligner les dalles
+    const gridHelper = new THREE.GridHelper(gridSize * spacing, gridSize, 0xff7700, 0x111115);
+    gridHelper.position.y = 0;
+    scene.add(gridHelper);
+
+    // --- PISTONS ---
+    function fixGeometryPivot(geo) {
+        geo.translate(0, pistonHeight / 2, 0); 
+        return geo;
+    }
+
+    function createStarGeometry(arms, outerRadius, innerRadius) {
+        const shape = new THREE.Shape();
+        const angleStep = (Math.PI * 2) / (arms * 2);
+        for (let i = 0; i < arms * 2; i++) {
+            const radius = i % 2 === 0 ? outerRadius : innerRadius;
+            const x = Math.cos(angleStep * i) * radius;
+            const y = Math.sin(angleStep * i) * radius;
+            if (i === 0) shape.moveTo(x, y);
+            else shape.lineTo(x, y);
+        }
+        shape.closePath();
+        const extrudeSettings = { depth: pistonHeight, bevelEnabled: false };
+        const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+        geo.rotateX(Math.PI / 2);
+        geo.center();
+        return geo;
+    }
+
+    const geoBox = fixGeometryPivot(new THREE.BoxGeometry(pistonSize, pistonHeight, pistonSize));
+    const geoCylinder = fixGeometryPivot(new THREE.CylinderGeometry(pistonSize/2, pistonSize/2, pistonHeight, 32));
+    const geoOctagon = fixGeometryPivot(new THREE.CylinderGeometry(pistonSize/2, pistonSize/2, pistonHeight, 8));
+    const geoStarShape = fixGeometryPivot(createStarGeometry(5, pistonSize/2, pistonSize/4));
+
+    const availableGeometries = [geoBox, geoCylinder, geoOctagon, geoStarShape];
+
+    const pistons = [];
+    const pistonGroup = new THREE.Group();
+
+    for (let x = 0; x < gridSize; x++) {
+        for (let z = 0; z < gridSize; z++) {
+            const randomGeo = availableGeometries[Math.floor(Math.random() * availableGeometries.length)];
+            const color = new THREE.Color();
+            const h = (x * gridSize + z) / (gridSize * gridSize); 
+            color.setHSL(h, 0.9, 0.5); 
+
+            const material = new THREE.MeshStandardMaterial({
+                color: color,
+                roughness: 0.1,
+                metalness: 0.6,
+                emissive: color,
+                emissiveIntensity: 0.2
+            });
+
+            const piston = new THREE.Mesh(randomGeo, material);
+            const posX = (x - gridSize / 2) * spacing;
+            const posZ = (z - gridSize / 2) * spacing;
+            piston.position.set(posX, 0, posZ);
+
+            piston.userData = {
+                speed: 1.5 + Math.random() * 2.0,
+                phase: Math.random() * Math.PI * 2,
+                freqX: x * 0.4,
+                freqZ: z * 0.4
+            };
+
+            pistonGroup.add(piston);
+            pistons.push(piston);
+        }
+    }
+    scene.add(pistonGroup);
+
+    // --- GALAXIE & ÉTOILES ---
+    function generateCircleTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 64;
+        canvas.height = 64;
+        const ctx = canvas.getContext('2d');
+        const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+        gradient.addColorStop(0.4, 'rgba(255, 255, 255, 0.8)');
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(32, 32, 32, 0, Math.PI * 2);
+        ctx.fill();
+        return new THREE.CanvasTexture(canvas);
+    }
+    const particleTexture = generateCircleTexture();
+
+    const galaxyGeometry = new THREE.BufferGeometry();
+    const galaxyParticles = 20000;
+    const galaxyPositions = new Float32Array(galaxyParticles * 3);
+    const galaxyColors = new Float32Array(galaxyParticles * 3);
+
+    for (let i = 0; i < galaxyParticles; i++) {
+        const r = Math.random() * 250;
+        const armAngle = (i % 3) * (Math.PI * 2 / 3);
+        const spinAngle = r * 3.0;
+
+        const x = Math.cos(armAngle + spinAngle) * r + (Math.random() - 0.5) * 15;
+        const z = Math.sin(armAngle + spinAngle) * r + (Math.random() - 0.5) * 15;
+        const y = (Math.random() - 0.5) * 8 - 35;
+
+        galaxyPositions[i * 3] = x;
+        galaxyPositions[i * 3 + 1] = y;
+        galaxyPositions[i * 3 + 2] = z;
+
+        const galaxyColor = new THREE.Color();
+        galaxyColor.setHSL(0.05 + (r/250) * 0.15, 0.9, 0.6); // Teintes ambrées/oranges/jaunes
+        galaxyColors[i * 3] = galaxyColor.r;
+        galaxyColors[i * 3 + 1] = galaxyColor.g;
+        galaxyColors[i * 3 + 2] = galaxyColor.b;
+    }
+
+    galaxyGeometry.setAttribute('position', new THREE.BufferAttribute(galaxyPositions, 3));
+    galaxyGeometry.setAttribute('color', new THREE.BufferAttribute(galaxyColors, 3));
+
+    const galaxyMaterial = new THREE.PointsMaterial({
+        size: 5,
+        map: particleTexture,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.8,
+        blending: THREE.AddBlending,
+        depthWrite: false
+    });
+
+    const galaxy = new THREE.Points(galaxyGeometry, galaxyMaterial);
+    scene.add(galaxy);
+
+    // --- ANIMATION ET TELEMETRIE ---
+    const clock = new THREE.Clock();
+    const valRpm = document.getElementById('val-rpm');
+    const valPress = document.getElementById('val-press');
+
+    function animate() {
+        requestAnimationFrame(animate);
+        const t = clock.getElapsedTime();
+
+        // Pulsation du néon & de l'émissivité des dalles oranges
+        neonUnderglow.intensity = 6 + Math.sin(t * 8) * 3;
+        matOrange.emissiveIntensity = 0.2 + Math.sin(t * 6) * 0.15;
+
+        // Pistons
+        pistons.forEach(p => {
+            const u = p.userData;
+            const rawWave = Math.sin(t * u.speed + u.phase + u.freqX) * 
+                             Math.cos(t * u.speed * 0.8 + u.freqZ);
+            const normalizedHeight = (rawWave + 1) / 2;
+            
+            p.scale.y = 0.02 + (normalizedHeight * 1.8);
+            p.material.emissiveIntensity = 0.1 + normalizedHeight * 0.8;
+        });
+
+        // Rotation Galaxie
+        galaxy.rotation.y = t * 0.02;
+
+        // Télémétrie
+        if (Math.random() < 0.1) {
+            valRpm.innerText = Math.floor(8200 + Math.random() * 600);
+            valPress.innerText = (27.5 + Math.random() * 2.2).toFixed(1) + " PSI";
+        }
+
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    animate();
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+</script>
+</body>
+</html>
