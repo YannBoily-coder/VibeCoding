@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Visualiseur Moléculaire 3D - THC vs LSD</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #030712;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .container {
+            display: flex;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .view {
+            flex: 1;
+            height: 100%;
+            position: relative;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .view:last-child {
+            border-right: none;
+        }
+
+        .info-card {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #f3f4f6;
+            background: rgba(15, 23, 42, 0.85);
+            padding: 16px 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(8px);
+            pointer-events: none;
+            z-index: 10;
+            max-width: 280px;
+        }
+
+        h2 { margin: 0 0 6px 0; font-size: 1.2rem; }
+        .thc-title { color: #10b981; }
+        .lsd-title { color: #8b5cf6; }
+
+        .formula {
+            font-family: monospace;
+            color: #9ca3af;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+
+        .legend {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            font-size: 0.8rem;
+        }
+
+        .legend li {
+            display: flex;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        #global-help {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(15, 23, 42, 0.9);
+            color: #9ca3af;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            pointer-events: none;
+            z-index: 100;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+    <div id="global-help">💡 Interactif : Clic gauche (Rotation) | Clic droit (Pan) | Molette (Zoom)</div>
+
+    <div class="container">
+        <div class="view" id="view-thc">
+            <div class="info-card">
+                <h2 class="thc-title">THC</h2>
+                <div class="formula">C₂₁H₃₀O₂</div>
+                <ul class="legend">
+                    <li><span class="dot" style="background: #4b5563;"></span> Carbone (C)</li>
+                    <li><span class="dot" style="background: #ffffff;"></span> Hydrogène (H)</li>
+                    <li><span class="dot" style="background: #ef4444;"></span> Oxygène (O)</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="view" id="view-lsd">
+            <div class="info-card">
+                <h2 class="lsd-title">LSD</h2>
+                <div class="formula">C₂₀H₂₅N₃O</div>
+                <ul class="legend">
+                    <li><span class="dot" style="background: #4b5563;"></span> Carbone (C)</li>
+                    <li><span class="dot" style="background: #ffffff;"></span> Hydrogène (H)</li>
+                    <li><span class="dot" style="background: #3b82f6;"></span> Azote (N)</li>
+                    <li><span class="dot" style="background: #ef4444;"></span> Oxygène (O)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const matC = new THREE.MeshPhongMaterial({ color: 0x4b5563, shininess: 60 });
+        const matH = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 100 }); // Blanc pur
+        const matO = new THREE.MeshPhongMaterial({ color: 0xef4444, shininess: 80 });
+        const matN = new THREE.MeshPhongMaterial({ color: 0x3b82f6, shininess: 80 });
+        const matBond = new THREE.MeshPhongMaterial({ color: 0x374151 });
+
+        const geoC = new THREE.SphereGeometry(0.4, 24, 24);
+        const geoH = new THREE.SphereGeometry(0.25, 16, 16); // Taille ajustée pour les H
+        const geoO = new THREE.SphereGeometry(0.38, 24, 24);
+        const geoN = new THREE.SphereGeometry(0.38, 24, 24);
+        const geoBond = new THREE.CylinderGeometry(0.07, 0.07, 1, 12);
+
+        function addBond(group, p1, p2) {
+            const distance = p1.distanceTo(p2);
+            const bond = new THREE.Mesh(geoBond, matBond);
+            bond.scale.y = distance;
+            bond.position.copy(p1).add(p2).multiplyScalar(0.5);
+            bond.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), p2.clone().sub(p1).normalize());
+            group.add(bond);
+        }
+
+        function setupMoleculeScene(containerId) {
+            const container = document.getElementById(containerId);
+            const scene = new THREE.Scene();
+
+            const camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.set(0, 4, 14);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            const light1 = new THREE.DirectionalLight(0xffffff, 0.8);
+            light1.position.set(10, 20, 15);
+            scene.add(light1);
+
+            const group = new THREE.Group();
+            scene.add(group);
+
+            return { scene, camera, renderer, controls, group, container };
+        }
+
+        const thcView = setupMoleculeScene('view-thc');
+        const lsdView = setupMoleculeScene('view-lsd');
+
+        // --- THC avec Atomes d'Hydrogène ---
+        function buildTHC(group) {
+            const atoms = [];
+            const carbons = [];
+
+            // Noyau Aromatique & Anneaux
+            const r1 = 1.8;
+            for(let i=0; i<6; i++) {
+                const a = (i * Math.PI)/3;
+                carbons.push(new THREE.Vector3(r1*Math.cos(a) - 2, r1*Math.sin(a), 0));
+            }
+
+            carbons.push(new THREE.Vector3(-0.2, 0.9, 0.5));
+            carbons.push(new THREE.Vector3(1.0, 0.2, 0.2));
+            carbons.push(new THREE.Vector3(0.8, -1.2, 0.1));
+            carbons.push(new THREE.Vector3(2.2, 0.8, -0.3));
+            carbons.push(new THREE.Vector3(3.2, -0.2, 0.2));
+            carbons.push(new THREE.Vector3(2.6, -1.5, -0.4));
+
+            // Chaîne pentyle
+            for(let i=1; i<=5; i++) {
+                carbons.push(new THREE.Vector3(-2 - (i*0.9), -1.8 - (i%2===0?0.3:-0.3), (i*0.2)));
+            }
+
+            // Ajout des Carbones
+            carbons.forEach(p => atoms.push({ pos: p, mat: matC, geo: geoC }));
+
+            // Oxygènes
+            atoms.push({ pos: new THREE.Vector3(-0.2, 0.9, 0.5), mat: matO, geo: geoO });
+            atoms.push({ pos: new THREE.Vector3(-3.6, 1.2, -0.4), mat: matO, geo: geoO });
+
+            // Ajout des Hydrogènes (blancs) sur les carbones
+            carbons.forEach(c => {
+                // Ajout d'un à deux hydrogènes satellites autour des carbones
+                atoms.push({ pos: c.clone().add(new THREE.Vector3(0.6, 0.6, 0.6)), mat: matH, geo: geoH });
+                atoms.push({ pos: c.clone().add(new THREE.Vector3(-0.6, -0.6, 0.6)), mat: matH, geo: geoH });
+            });
+
+            renderMolecule(group, atoms, 1.65);
+        }
+
+        // --- LSD avec Atomes d'Hydrogène ---
+        function buildLSD(group) {
+            const atoms = [];
+            const carbons = [];
+
+            // Noyau Ergoline
+            const r = 1.6;
+            for(let i=0; i<5; i++) {
+                const a = (i * Math.PI)/3;
+                carbons.push(new THREE.Vector3(r*Math.cos(a) - 2.2, r*Math.sin(a), 0));
+            }
+
+            carbons.push(new THREE.Vector3(-0.4, 0.8, 0.3));
+            carbons.push(new THREE.Vector3(0.8, 1.4, -0.2));
+            carbons.push(new THREE.Vector3(1.2, -0.9, -0.3));
+            carbons.push(new THREE.Vector3(-0.2, -0.8, 0.1));
+            carbons.push(new THREE.Vector3(2.2, 1.2, -1.2));
+            carbons.push(new THREE.Vector3(4.2, 1.6, -2.4));
+            carbons.push(new THREE.Vector3(5.4, 1.0, -2.9));
+            carbons.push(new THREE.Vector3(3.9, -0.5, -1.0));
+            carbons.push(new THREE.Vector3(5.2, -0.8, -0.3));
+
+            carbons.forEach(p => atoms.push({ pos: p, mat: matC, geo: geoC }));
+
+            // Azotes (N)
+            atoms.push({ pos: new THREE.Vector3(-2.2 + r*Math.cos(5*Math.PI/3), r*Math.sin(5*Math.PI/3), 0), mat: matN, geo: geoN });
+            atoms.push({ pos: new THREE.Vector3(1.8, 0.4, 0.1), mat: matN, geo: geoN });
+            atoms.push({ pos: new THREE.Vector3(3.4, 0.8, -1.5), mat: matN, geo: geoN });
+
+            // Oxygène (O)
+            atoms.push({ pos: new THREE.Vector3(1.8, 2.2, -1.9), mat: matO, geo: geoO });
+
+            // Hydrogènes (H) autour des carbones
+            carbons.forEach(c => {
+                atoms.push({ pos: c.clone().add(new THREE.Vector3(0.55, 0.55, -0.55)), mat: matH, geo: geoH });
+            });
+
+            renderMolecule(group, atoms, 1.65);
+        }
+
+        function renderMolecule(group, atoms, maxDist) {
+            const meshList = atoms.map(a => {
+                const mesh = new THREE.Mesh(a.geo, a.mat);
+                mesh.position.copy(a.pos);
+                group.add(mesh);
+                return a.pos;
+            });
+
+            for(let i=0; i<meshList.length; i++) {
+                for(let j=i+1; j<meshList.length; j++) {
+                    if(meshList[i].distanceTo(meshList[j]) < maxDist) {
+                        addBond(group, meshList[i], meshList[j]);
+                    }
+                }
+            }
+        }
+
+        buildTHC(thcView.group);
+        buildLSD(lsdView.group);
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            thcView.group.rotation.y += 0.003;
+            lsdView.group.rotation.y += 0.003;
+
+            thcView.controls.update();
+            lsdView.controls.update();
+
+            thcView.renderer.render(thcView.scene, thcView.camera);
+            lsdView.renderer.render(lsdView.scene, lsdView.camera);
+        }
+
+        window.addEventListener('resize', () => {
+            [thcView, lsdView].forEach(v => {
+                const w = v.container.clientWidth;
+                const h = v.container.clientHeight;
+                v.camera.aspect = w / h;
+                v.camera.updateProjectionMatrix();
+                v.renderer.setSize(w, h);
+            });
+        });
+
+        animate();
+    </script>
+</body>
+</html>
