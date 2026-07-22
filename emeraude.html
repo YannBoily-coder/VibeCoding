@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Représentation Moléculaire - Émeraude (Béryl)</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050811;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #info-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #e0e6ed;
+            background: rgba(10, 15, 30, 0.85);
+            padding: 18px 24px;
+            border-radius: 12px;
+            border: 1px solid rgba(76, 209, 149, 0.3);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            backdrop-filter: blur(8px);
+            max-width: 320px;
+            pointer-events: none;
+        }
+        h1 {
+            font-size: 1.2rem;
+            margin: 0 0 10px 0;
+            color: #2ecc71;
+            text-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
+        }
+        ul {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 12px 0;
+            font-size: 0.85rem;
+        }
+        li {
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+        }
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 10px;
+        }
+        p {
+            margin: 0;
+            font-size: 0.8rem;
+            color: #94a3b8;
+        }
+    </style>
+    <!-- Inclusion de Three.js et OrbitControls via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+    <div id="info-panel">
+        <h1>Structure Émeraude</h1>
+        <ul>
+            <li><span class="dot" style="background: #e74c3c;"></span> <strong>Silicium (Si)</strong> - Anneau hexagonal</li>
+            <li><span class="dot" style="background: #ffffff;"></span> <strong>Oxygène (O)</strong> - Liaisons</li>
+            <li><span class="dot" style="background: #3498db;"></span> <strong>Béryllium (Be)</strong> - Ponts d'interconnexion</li>
+            <li><span class="dot" style="background: #9b59b6;"></span> <strong>Aluminium (Al)</strong> - Structure</li>
+            <li><span class="dot" style="background: #2ecc71; box-shadow: 0 0 8px #2ecc71;"></span> <strong>Inclusion Chrome (Cr³⁺)</strong> - Rayonnement vert</li>
+        </ul>
+        <p>💡 <em>Maintiens le clic gauche pour faire tourner, molette pour zoomer.</em><br />
+           💡 <em>Maintiens le clic droit pour faire bouger.</em></p>
+    </div>
+
+    <script>
+        // 1. Scène, Caméra, Rendu
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x050811, 0.03);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 8, 15);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        // 2. Contrôles de caméra (Orbit)
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // 3. Éclairage
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const pointLight = new THREE.PointLight(0x2ecc71, 2, 50);
+        pointLight.position.set(0, 0, 0); // Lumière émise depuis l'inclusion au centre
+        scene.add(pointLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 20, 10);
+        scene.add(dirLight);
+
+        // 4. Groupe principal de la molécule
+        const moleculeGroup = new THREE.Group();
+        scene.add(moleculeGroup);
+
+        // Matériaux des atomes
+        const matSi = new THREE.MeshPhongMaterial({ color: 0xe74c3c, shininess: 80 }); // Silicium
+        const matO  = new THREE.MeshPhongMaterial({ color: 0xf1f2f6, opacity: 0.8, transparent: true }); // Oxygène
+        const matBe = new THREE.MeshPhongMaterial({ color: 0x3498db, shininess: 80 }); // Béryllium
+        const matAl = new THREE.MeshPhongMaterial({ color: 0x9b59b6, shininess: 80 }); // Aluminium
+        const matBond = new THREE.MeshPhongMaterial({ color: 0x485460 }); // Liaisons
+
+        // Inclusion spéciale : Chrome (vert brillant)
+        const matCr = new THREE.MeshStandardMaterial({
+            color: 0x2ecc71,
+            emissive: 0x2ecc71,
+            emissiveIntensity: 0.6,
+            roughness: 0.2,
+            metalness: 0.8
+        });
+
+        // Géométries
+        const geoAtom = new THREE.SphereGeometry(0.4, 32, 32);
+        const geoCenterAtom = new THREE.SphereGeometry(0.7, 32, 32);
+
+        // Créer une liaison (cylindre entre deux points)
+        function createBond(p1, p2) {
+            const distance = p1.distanceTo(p2);
+            const geoCylinder = new THREE.CylinderGeometry(0.08, 0.08, distance, 16);
+            const bond = new THREE.Mesh(geoCylinder, matBond);
+
+            // Positionner au milieu des deux points
+            bond.position.copy(p1).add(p2).multiplyScalar(0.5);
+
+            // Orienter le cylindre vers le second point
+            bond.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), p2.clone().sub(p1).normalize());
+
+            moleculeGroup.add(bond);
+        }
+
+        // 5. Construction de l'anneau Hexagonal de Silicium (Si6O18)
+        const radiusHex = 4;
+        const siPositions = [];
+
+        for (let i = 0; i < 6; i++) {
+            const angle = (i * Math.PI) / 3;
+            const x = radiusHex * Math.cos(angle);
+            const z = radiusHex * Math.sin(angle);
+            const pos = new THREE.Vector3(x, 0, z);
+            siPositions.push(pos);
+
+            // Atome de Silicium (Sommets de l'hexagone)
+            const atomSi = new THREE.Mesh(geoAtom, matSi);
+            atomSi.position.copy(pos);
+            moleculeGroup.add(atomSi);
+        }
+
+        // Relier les atomes de Silicium en hexagone avec des atomes d'Oxygène entre eux
+        for (let i = 0; i < 6; i++) {
+            const p1 = siPositions[i];
+            const p2 = siPositions[(i + 1) % 6];
+
+            // Oxygène intermédiaire
+            const midPos = p1.clone().add(p2).multiplyScalar(0.5);
+            midPos.y += (i % 2 === 0 ? 0.5 : -0.5); // Effet d'ondulation 3D
+
+            const atomO = new THREE.Mesh(geoAtom, matO);
+            atomO.scale.set(0.75, 0.75, 0.75);
+            atomO.position.copy(midPos);
+            moleculeGroup.add(atomO);
+
+            // Liaisons
+            createBond(p1, midPos);
+            createBond(midPos, p2);
+        }
+
+        // 6. Ajouter les atomes périphériques (Béryllium & Aluminium)
+        siPositions.forEach((pos, idx) => {
+            const outerPos = pos.clone().multiplyScalar(1.5);
+            outerPos.y += (idx % 2 === 0 ? 1.8 : -1.8);
+
+            const matPeripheral = idx % 2 === 0 ? matBe : matAl;
+            const atomPeripheral = new THREE.Mesh(geoAtom, matPeripheral);
+            atomPeripheral.position.copy(outerPos);
+            moleculeGroup.add(atomPeripheral);
+
+            createBond(pos, outerPos);
+        });
+
+        // 7. L'INCLUSION CENTRALE (Le Chrome Cr3+ qui donne le vert)
+        const centerChrome = new THREE.Mesh(geoCenterAtom, matCr);
+        centerChrome.position.set(0, 0, 0);
+        moleculeGroup.add(centerChrome);
+
+        // Relier le Chrome central à tous les atomes de l'anneau (Réseau d'interconnexion)
+        siPositions.forEach(pos => {
+            createBond(new THREE.Vector3(0, 0, 0), pos);
+        });
+
+        // 8. Animation & Redimensionnement
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Rotation automatique douce de la molécule
+            moleculeGroup.rotation.y += 0.005;
+            moleculeGroup.rotation.x += 0.002;
+
+            // Effet de "pulsation" lumineuse sur l'inclusion de chrome
+            const time = Date.now() * 0.003;
+            pointLight.intensity = 1.5 + Math.sin(time) * 0.5;
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
