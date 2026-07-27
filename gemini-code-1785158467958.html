@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vibe Coding - Volcan FX Master</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #090a10;
+      color: #fff;
+      font-family: system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+    }
+    #canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+    .ui {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      background: rgba(15, 18, 28, 0.88);
+      padding: 15px 20px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(8px);
+      z-index: 10;
+      user-select: none;
+      min-width: 220px;
+    }
+    .ui label { display: block; margin-top: 10px; font-size: 0.82rem; color: #aaa; }
+    .ui input[type=range] { width: 100%; margin-top: 4px; cursor: pointer; }
+    .section-title { color: #ff6b35; font-weight: bold; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+
+  <div class="ui">
+    <div class="section-title">🌋 Physique du Volcan</div>
+    
+    <label>Pression Magmatique : <span id="pVal">80</span>%</label>
+    <input type="range" id="pressure" min="20" max="100" value="80">
+    
+    <label>Puissance Éjection : <span id="sVal">12</span></label>
+    <input type="range" id="speed" min="5" max="25" value="12">
+
+    <label>Vent (Latéral) : <span id="wVal">0.10</span></label>
+    <input type="range" id="wind" min="-0.5" max="0.5" step="0.02" value="0.10">
+
+    <label>Tremblement Sol : <span id="shVal">8</span></label>
+    <input type="range" id="shake" min="0" max="20" value="8">
+  </div>
+
+  <canvas id="canvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    let width = 0;
+    let height = 0;
+
+    function resize() {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+      updateVolcanoCoords();
+    }
+
+    // Controls UI
+    let pressure = 0.8;
+    let speedMult = 12;
+    let windForce = 0.10;
+    let maxShakeInt = 8;
+
+    document.getElementById('pressure').addEventListener('input', (e) => {
+      pressure = e.target.value / 100;
+      document.getElementById('pVal').innerText = e.target.value;
+    });
+    document.getElementById('speed').addEventListener('input', (e) => {
+      speedMult = parseFloat(e.target.value);
+      document.getElementById('sVal').innerText = e.target.value;
+    });
+    document.getElementById('wind').addEventListener('input', (e) => {
+      windForce = parseFloat(e.target.value);
+      document.getElementById('wVal').innerText = windForce.toFixed(2);
+    });
+    document.getElementById('shake').addEventListener('input', (e) => {
+      maxShakeInt = parseFloat(e.target.value);
+      document.getElementById('shVal').innerText = e.target.value;
+    });
+
+    // Structure du Volcan
+    const volcano = {
+      cx: 0,
+      baseY: 0,
+      topY: 0,
+      chamberY: 0,
+      chamberRadius: 60,
+      vents: []
+    };
+
+    function updateVolcanoCoords() {
+      volcano.cx = width / 2;
+      volcano.baseY = height;
+      volcano.topY = height - Math.min(260, height * 0.35);
+      volcano.chamberY = height - Math.min(80, height * 0.1);
+      
+      volcano.vents = [
+        { x: volcano.cx, y: volcano.topY, angle: -Math.PI / 2 },
+        { x: volcano.cx - 90, y: volcano.topY + 60, angle: -Math.PI / 1.35 },
+        { x: volcano.cx + 90, y: volcano.topY + 60, angle: -Math.PI / 3.8 }
+      ];
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Particules & Explosions
+    let particles = [];
+    const MAX_PARTICLES = 850;
+
+    class LavaParticle {
+      constructor(x, y, angle, speed, isSubParticle = false) {
+        this.reset(x, y, angle, speed, isSubParticle);
+      }
+
+      reset(x, y, angle, speed, isSubParticle = false) {
+        this.x = x;
+        this.y = y;
+        this.isSubParticle = isSubParticle;
+        
+        const spread = isSubParticle ? Math.PI * 2 : (Math.random() - 0.5) * 0.6;
+        const finalAngle = isSubParticle ? Math.random() * Math.PI * 2 : angle + spread;
+        const velocity = isSubParticle ? 1 + Math.random() * 4 : speed * (0.6 + Math.random() * 0.8);
+
+        this.vx = Math.cos(finalAngle) * velocity;
+        this.vy = Math.sin(finalAngle) * velocity;
+        
+        this.gravity = 0.22;
+        this.friction = isSubParticle ? 0.96 : 0.985;
+        this.life = 1.0;
+        this.decay = isSubParticle ? (0.02 + Math.random() * 0.03) : (0.008 + Math.random() * 0.012);
+        this.size = isSubParticle ? (1.2 + Math.random() * 1.8) : (2.5 + Math.random() * 3.5);
+        this.hue = 10 + Math.random() * 35;
+        
+        // TRICK 2 : Flag pour explosion au sommet (apogée de la trajectoire)
+        this.canExplode = !isSubParticle && Math.random() < 0.18; // 18% de chance d'exploser
+        this.hasExploded = false;
+      }
+
+      update() {
+        this.vx *= this.friction;
+        this.vy *= this.friction;
+        this.vy += this.gravity;
+        
+        // TRICK 1 : Application du vent latéral
+        this.vx += windForce;
+
+        this.x += this.vx;
+        this.y += this.vy;
+        
+        this.life -= this.decay;
+
+        // Détection de l'apogée (vitesse verticale proche de zéro) -> EXPLOSION
+        if (this.canExplode && !this.hasExploded && Math.abs(this.vy) < 0.8 && this.life > 0.4) {
+          this.explode();
+        }
+      }
+
+      explode() {
+        this.hasExploded = true;
+        const sparkCount = 8 + Math.floor(Math.random() * 8);
+        for (let i = 0; i < sparkCount; i++) {
+          if (particles.length < MAX_PARTICLES) {
+            particles.push(new LavaParticle(this.x, this.y, 0, 0, true));
+          }
+        }
+      }
+
+      draw(ctx) {
+        if (this.life <= 0) return;
+        ctx.fillStyle = `hsla(${this.hue}, 100%, ${50 + this.life * 40}%, ${Math.max(0, this.life)})`;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, Math.max(0.1, this.size * this.life), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Animation Loop
+    function animate() {
+      // TRICK 3 : Camera Shake lié à la pression magmatique
+      let shakeX = 0;
+      let shakeY = 0;
+      if (maxShakeInt > 0 && Math.random() < pressure) {
+        const intensity = (pressure * maxShakeInt) * 0.7;
+        shakeX = (Math.random() - 0.5) * intensity;
+        shakeY = (Math.random() - 0.5) * intensity;
+      }
+
+      ctx.save();
+      // Application de la secousse de la caméra
+      ctx.translate(shakeX, shakeY);
+
+      // Nettoyage avec effet de traînée
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = 'rgba(9, 10, 16, 0.25)';
+      ctx.fillRect(-20, -20, width + 40, height + 40);
+
+      // 1. Structure du Volcan
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#2d3245';
+      ctx.fillStyle = '#141824';
+
+      ctx.beginPath();
+      ctx.moveTo(volcano.cx - 320, volcano.baseY);
+      ctx.lineTo(volcano.cx - 110, volcano.topY + 60);
+      ctx.lineTo(volcano.cx - 40, volcano.topY);
+      ctx.lineTo(volcano.cx + 40, volcano.topY);
+      ctx.lineTo(volcano.cx + 110, volcano.topY + 60);
+      ctx.lineTo(volcano.cx + 320, volcano.baseY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Chambre & conduits magmatiques
+      ctx.fillStyle = '#ff3300';
+      ctx.strokeStyle = '#ff4500';
+      ctx.lineWidth = 10 * pressure;
+
+      volcano.vents.forEach(vent => {
+        ctx.beginPath();
+        ctx.moveTo(volcano.cx, volcano.chamberY);
+        ctx.lineTo(vent.x, vent.y);
+        ctx.stroke();
+      });
+
+      ctx.beginPath();
+      ctx.arc(volcano.cx, volcano.chamberY, volcano.chamberRadius * (0.8 + pressure * 0.3), 0, Math.PI * 2);
+      ctx.fill();
+
+      // 2. Émission de lave
+      volcano.vents.forEach((vent, idx) => {
+        if (Math.random() < pressure * (idx === 0 ? 0.7 : 0.4)) {
+          if (particles.length < MAX_PARTICLES) {
+            particles.push(new LavaParticle(vent.x, vent.y, vent.angle, speedMult));
+          }
+        }
+      });
+
+      // 3. Rendu & Mise à jour des particules (Lighter / Glow)
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.update();
+        p.draw(ctx);
+
+        if (p.life <= 0 || p.y > height + 20) {
+          particles.splice(i, 1);
+        }
+      }
+
+      ctx.restore(); // Annule le translate du Shake pour la frame suivante
+
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
