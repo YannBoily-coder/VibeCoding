@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Pulsar 3D - Explosion & Traînées façon Feu d'Artifice</title>
+  <style>
+    body { margin: 0; overflow: hidden; background-color: #000005; }
+    canvas { display: block; }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+<script>
+// 1. Setup Scène & Caméra
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 15, 65);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+document.body.appendChild(renderer.domElement);
+
+const pulsarGroup = new THREE.Group();
+scene.add(pulsarGroup);
+pulsarGroup.rotation.z = Math.PI / 6;
+
+// --- 2. Texture Lumineuse ---
+function createCircleTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64; canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  gradient.addColorStop(0.3, 'rgba(0, 220, 255, 0.8)');
+  gradient.addColorStop(1, 'rgba(0, 50, 255, 0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(canvas);
+}
+
+const sparkTexture = createCircleTexture();
+
+// --- 3. Cœur en Sphères ---
+const sphereCount = 120;
+const sphereGroup = new THREE.Group();
+pulsarGroup.add(sphereGroup);
+
+const spheres = [];
+const sphereGeometry = new THREE.SphereGeometry(0.8, 16, 16);
+const sphereMaterial = new THREE.MeshBasicMaterial({
+  color: 0x00dfff,
+  wireframe: true,
+  transparent: true,
+  opacity: 0.8
+});
+
+for (let i = 0; i < sphereCount; i++) {
+  const mesh = new THREE.Mesh(sphereGeometry, sphereMaterial.clone());
+  const radius = 3.5 + Math.random() * 4.5;
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos((Math.random() * 2) - 1);
+
+  const x = radius * Math.sin(phi) * Math.cos(theta);
+  const y = radius * Math.sin(phi) * Math.sin(theta);
+  const z = radius * Math.cos(phi);
+
+  mesh.position.set(x, y, z);
+  mesh.userData = {
+    basePos: new THREE.Vector3(x, y, z),
+    baseScale: 0.8 + Math.random() * 0.5,
+    dir: new THREE.Vector3(x, y, z).normalize() // Direction radiale de l'explosion
+  };
+
+  sphereGroup.add(mesh);
+  spheres.push(mesh);
+}
+
+const innerCore = new THREE.Mesh(
+  new THREE.SphereGeometry(2.0, 32, 32),
+  new THREE.MeshBasicMaterial({ color: 0xffffff })
+);
+pulsarGroup.add(innerCore);
+
+
+// --- 4. JETS EN MIROIR PARFAIT ---
+const pairsCount = 500;
+const totalJetParticles = pairsCount * 2;
+
+const jetGeometry = new THREE.BufferGeometry();
+const jetPositions = new Float32Array(totalJetParticles * 3);
+const jetBaseData = [];
+
+for (let i = 0; i < pairsCount; i++) {
+  const height = 2 + Math.random() * 50;
+  const angle = Math.random() * Math.PI * 2;
+  const baseRadius = (height * 0.2) + (Math.random() * 1.2);
+  const speedOffset = Math.random() * 10;
+
+  jetBaseData.push({ height, angle, baseRadius, speedOffset });
+}
+
+jetGeometry.setAttribute('position', new THREE.BufferAttribute(jetPositions, 3));
+
+const jetMaterial = new THREE.PointsMaterial({
+  color: 0x00ffff,
+  size: 1.8,
+  map: sparkTexture,
+  transparent: true,
+  opacity: 0.85,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false
+});
+
+const jetSystem = new THREE.Points(jetGeometry, jetMaterial);
+pulsarGroup.add(jetSystem);
+
+
+// --- 5. SYSTÈME D'EXPLOSION / ÉTINCELLES DE FEU D'ARTIFICE ---
+const sparksPerSphere = 6; // Nombre de p'tites étincelles par sphère
+const totalSparks = sphereCount * sparksPerSphere;
+
+const sparkGeometry = new THREE.BufferGeometry();
+const sparkPositions = new Float32Array(totalSparks * 3);
+const sparkData = [];
+
+for (let i = 0; i < sphereCount; i++) {
+  const sphereDir = spheres[i].userData.dir;
+
+  for (let j = 0; j < sparksPerSphere; j++) {
+    const idx = (i * sparksPerSphere + j);
+    
+    // Léger cône de dispersion autour du vecteur de la sphère
+    const spread = 0.35;
+    const sparkDir = new THREE.Vector3(
+      sphereDir.x + (Math.random() - 0.5) * spread,
+      sphereDir.y + (Math.random() - 0.5) * spread,
+      sphereDir.z + (Math.random() - 0.5) * spread
+    ).normalize();
+
+    sparkData.push({
+      sphereIndex: i,
+      dir: sparkDir,
+      speed: 15 + Math.random() * 25, // Vitesse de projection
+      life: 0 // Vie de l'étincelle
+    });
+
+    sparkPositions[idx * 3] = 0;
+    sparkPositions[idx * 3 + 1] = 0;
+    sparkPositions[idx * 3 + 2] = 0;
+  }
+}
+
+sparkGeometry.setAttribute('position', new THREE.BufferAttribute(sparkPositions, 3));
+
+const sparkMaterial = new THREE.PointsMaterial({
+  color: 0xffffff,
+  size: 1.2,
+  map: sparkTexture,
+  transparent: true,
+  opacity: 1.0,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false
+});
+
+const sparkSystem = new THREE.Points(sparkGeometry, sparkMaterial);
+pulsarGroup.add(sparkSystem);
+
+
+// --- 6. Particules Environnantes ---
+const particleCount = 2000;
+const particleGeometry = new THREE.BufferGeometry();
+const particlePositions = new Float32Array(particleCount * 3);
+const particleDistances = new Float32Array(particleCount);
+
+for (let i = 0; i < particleCount; i++) {
+  const i3 = i * 3;
+  const radius = 10 + Math.random() * 40;
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos((Math.random() * 2) - 1);
+
+  particlePositions[i3] = radius * Math.sin(phi) * Math.cos(theta);
+  particlePositions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+  particlePositions[i3 + 2] = radius * Math.cos(phi);
+
+  particleDistances[i] = radius;
+}
+
+particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+
+const particles = new THREE.Points(particleGeometry, new THREE.PointsMaterial({
+  color: 0x00bfff,
+  size: 1.5,
+  map: sparkTexture,
+  transparent: true,
+  opacity: 0.7,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false
+}));
+scene.add(particles);
+
+
+// --- 7. Animation Globale ---
+const PULSE_INTERVAL = 1.3;
+const clock = new THREE.Clock();
+let lastPulseTime = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  const delta = clock.getDelta();
+  const time = clock.getElapsedTime();
+
+  // Rotation globale
+  pulsarGroup.rotation.y += 8.0 * delta;
+
+  // Gestion du Pulse
+  const timeSinceLastPulse = time % PULSE_INTERVAL;
+  const pulsePhase = Math.min(timeSinceLastPulse / 0.35, 1.0);
+  const pulseImpact = Math.pow(1.0 - pulsePhase, 3.0);
+
+  // A. Sphères
+  spheres.forEach((sphere, index) => {
+    const base = sphere.userData.basePos;
+    const pushFactor = 1 + pulseImpact * 0.7 + Math.sin(time * 8 + index) * 0.08;
+    sphere.position.set(base.x * pushFactor, base.y * pushFactor, base.z * pushFactor);
+
+    const scale = sphere.userData.baseScale * (1 + pulseImpact * 1.8);
+    sphere.scale.setScalar(scale);
+
+    sphere.material.color.setHSL(0.55, 1.0, 0.4 + pulseImpact * 0.6);
+  });
+
+  // B. Animation des ÉTINCELLES / FEU D'ARTIFICE
+  const sPos = sparkGeometry.attributes.position;
+  
+  // Si le pulse vient de recommencer (détonation)
+  if (timeSinceLastPulse < 0.05 && lastPulseTime >= 0.05) {
+    sparkMaterial.opacity = 1.0;
+  }
+  lastPulseTime = timeSinceLastPulse;
+
+  for (let i = 0; i < totalSparks; i++) {
+    const data = sparkData[i];
+    const parentSphere = spheres[data.sphereIndex];
+
+    // Distance de projection de l'étincelle depuis sa sphère d'origine
+    // Utilise une courbe amortie pour donner un effet de traînée qui ralentit
+    const travel = Math.pow(timeSinceLastPulse, 0.6) * data.speed;
+
+    sPos.array[i * 3]     = parentSphere.position.x + data.dir.x * travel;
+    sPos.array[i * 3 + 1] = parentSphere.position.y + data.dir.y * travel;
+    sPos.array[i * 3 + 2] = parentSphere.position.z + data.dir.z * travel;
+  }
+  
+  // Dissolution progressive des étincelles avant le prochain pulse
+  sparkMaterial.opacity = Math.max(0, 1.0 - (timeSinceLastPulse / (PULSE_INTERVAL * 0.85)));
+  sparkGeometry.attributes.position.needsUpdate = true;
+
+  // C. Jets en Miroir
+  const posAttr = jetGeometry.attributes.position;
+  for (let i = 0; i < pairsCount; i++) {
+    const data = jetBaseData[i];
+    let h = (data.height + time * 35 + data.speedOffset) % 52;
+    
+    const wave = Math.sin(time * 10 + h * 0.15) * (0.5 + pulseImpact * 2.0);
+    const currentRadius = (data.baseRadius + wave) * (1 + pulseImpact * 1.2);
+    const currentAngle = data.angle + time * 4 + (h * 0.04);
+
+    const x = Math.cos(currentAngle) * currentRadius;
+    const z = Math.sin(currentAngle) * currentRadius;
+
+    const idxNorth = i * 6;
+    posAttr.array[idxNorth]     = x;
+    posAttr.array[idxNorth + 1] = h;
+    posAttr.array[idxNorth + 2] = z;
+
+    const idxSouth = idxNorth + 3;
+    posAttr.array[idxSouth]     = x;
+    posAttr.array[idxSouth + 1] = -h;
+    posAttr.array[idxSouth + 2] = z;
+  }
+  posAttr.needsUpdate = true;
+
+  // D. Particules de fond
+  const pPos = particleGeometry.attributes.position;
+  for (let i = 0; i < particleCount; i++) {
+    const i3 = i * 3;
+    const baseR = particleDistances[i];
+    const push = Math.sin(baseR * 0.25 - timeSinceLastPulse * 9.0) * pulseImpact * 3.5;
+    const currentR = baseR + Math.max(0, push);
+    const factor = currentR / baseR;
+
+    pPos.array[i3] = particlePositions[i3] * factor;
+    pPos.array[i3 + 1] = particlePositions[i3 + 1] * factor;
+    pPos.array[i3 + 2] = particlePositions[i3 + 2] * factor;
+  }
+  pPos.needsUpdate = true;
+
+  particles.rotation.y += 0.03 * delta;
+
+  renderer.render(scene, camera);
+}
+
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
