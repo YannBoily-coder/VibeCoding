@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convertisseur Emoji Bi-directionnel</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 650px;
+            width: 100%;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            color: #38bdf8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            text-align: center;
+        }
+        .field-group {
+            margin-bottom: 20px;
+        }
+        .label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        label {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            font-weight: 600;
+        }
+        .btn-copy {
+            background: #334155;
+            color: #f8fafc;
+            border: none;
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-copy:hover {
+            background: #475569;
+        }
+        textarea {
+            width: 100%;
+            height: 100px;
+            background: #0f172a;
+            border: 1px solid #475569;
+            border-radius: 8px;
+            padding: 12px;
+            color: #f8fafc;
+            font-size: 1.1rem;
+            resize: vertical;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        textarea:focus {
+            border-color: #38bdf8;
+        }
+        #emojiText {
+            font-size: 1.4rem;
+            letter-spacing: 0.05em;
+        }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h1>Traducteur Texte ↔ Emojis</h1>
+
+    <div class="field-group">
+        <div class="label-row">
+            <label for="latinText">TEXTE LATIN</label>
+            <button class="btn-copy" onclick="copier('latinText', this)">Copier</button>
+        </div>
+        <textarea id="latinText" placeholder="Tape ton texte ici..."></textarea>
+    </div>
+
+    <div class="field-group">
+        <div class="label-row">
+            <label for="emojiText">TRADUCTION EMOJIS</label>
+            <button class="btn-copy" onclick="copier('emojiText', this)">Copier</button>
+        </div>
+        <textarea id="emojiText" placeholder="Tes emojis s'afficheront ici..."></textarea>
+    </div>
+</div>
+
+<script>
+    const alphabetMap = [
+        ['a', '🍎'], ['b', '🍌'], ['c', '🐱'], ['d', '🎲'],
+        ['e', '⚡'], ['f', '🔥'], ['g', '🎸'], ['h', '🎩'],
+        ['i', '🍦'], ['j', '🕹️'], ['k', '🔑'], ['l', '🍋'],
+        ['m', '🌙'], ['n', '🎵'], ['o', '🐙'], ['p', '🍕'],
+        ['q', '👑'], ['r', '🚀'], ['s', '☀️'], ['t', '🌮'],
+        ['u', '🦄'], ['v', '🎻'], ['w', '🌊'], ['x', '❌'],
+        ['y', '🪀'], ['z', '🧟'],
+        ['é', '⚡'], ['è', '⚡'], ['ê', '⚡'], ['à', '🍎'], ['â', '🍎'], ['ù', '🦄']
+    ];
+
+    const latinInput = document.getElementById('latinText');
+    const emojiInput = document.getElementById('emojiText');
+
+    // Latin -> Emojis
+    latinInput.addEventListener('input', () => {
+        let txt = latinInput.value.toLowerCase();
+        for (const [lettre, emoji] of alphabetMap) {
+            txt = txt.replaceAll(lettre, emoji);
+        }
+        emojiInput.value = txt;
+    });
+
+    // Emojis -> Latin
+    emojiInput.addEventListener('input', () => {
+        let txt = emojiInput.value;
+        for (const [lettre, emoji] of alphabetMap) {
+            txt = txt.replaceAll(emoji, lettre);
+        }
+        latinInput.value = txt;
+    });
+
+    function copier(idElement, btn) {
+        const el = document.getElementById(idElement);
+        if (!el.value) return;
+        
+        navigator.clipboard.writeText(el.value).then(() => {
+            const txtOriginal = btn.textContent;
+            btn.textContent = 'Copié !';
+            btn.style.background = '#0284c7';
+            setTimeout(() => {
+                btn.textContent = txtOriginal;
+                btn.style.background = '#334155';
+            }, 1200);
+        });
+    }
+</script>
+
+</body>
+</html>
